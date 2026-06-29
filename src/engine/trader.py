@@ -42,6 +42,8 @@ class LiveTrader:
         quote_fn=None,
         notifier=None,
         allow_odd_lot: bool = True,
+        regime_filter: bool = False,
+        regime_ma: int = 200,
     ):
         self.provider = provider
         self.broker = broker
@@ -50,6 +52,9 @@ class LiveTrader:
         self.dry_run = dry_run
         self.lookback_days = lookback_days
         self.allow_odd_lot = allow_odd_lot
+        # 大盤風向濾網：與回測一致，加權指數跌破年線時禁止做多。
+        self.regime_filter = regime_filter
+        self.regime_ma = regime_ma
         # quote_fn(symbol) -> 即時價 (盤中用)，把今天這根 K 換成現價，讓突破/停損即時生效。
         self.quote_fn = quote_fn
         self.notifier = notifier
@@ -91,6 +96,11 @@ class LiveTrader:
         bench = self.provider.benchmark(start, end)
         plans: List[TradePlan] = []
 
+        # 大盤風向：加權指數是否在年線之上 (空頭則本輪禁止做多)。
+        bull_market = True
+        if self.regime_filter and bench is not None and len(bench) >= self.regime_ma:
+            bull_market = float(bench.iloc[-1]) >= float(bench.rolling(self.regime_ma).mean().iloc[-1])
+
         for sym in symbols:
             df = self.provider.history(sym, start, end)
             if df.empty:
@@ -111,6 +121,8 @@ class LiveTrader:
                 continue
 
             if sig.action == Action.BUY and pos is None:
+                if not bull_market:  # 大盤空頭，禁止做多 (與回測一致)
+                    continue
                 budget = self.position_budget * sig.strength
                 if self.allow_odd_lot:
                     shares = int(budget // price)               # 零股

@@ -165,6 +165,7 @@ def cmd_scan(args):
         dry_run=not args.live,
         quote_fn=quote_fn,
         notifier=notifier,
+        regime_filter=args.regime,
     )
     plans = trader.scan(symbols, args.end)
 
@@ -315,6 +316,7 @@ def build_parser():
     sc.add_argument("--live", action="store_true", help="真的送單 (預設只 dry-run)")
     sc.add_argument("--realtime", action="store_true", help="盤中用 Shioaji 即時報價更新今日 K (不下單也可)")
     sc.add_argument("--real-account", action="store_true", help="Shioaji 用實單帳戶 (預設模擬盤)")
+    sc.add_argument("--regime", action="store_true", help="大盤風向濾網：跌破年線時禁止做多 (建議開啟)")
     sc.set_defaults(func=cmd_scan)
 
     cp = sub.add_parser("compare", help="批次比較：所有策略跑同一批股票，按夏普排名")
