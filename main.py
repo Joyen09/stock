@@ -56,6 +56,18 @@ def _provider(args):
     return SampleDataProvider()
 
 
+def _symbols(args, provider):
+    """決定要處理哪些股票：--symbols 優先；否則用 provider 的清單；
+    FinMind 沒內建清單時退回 universe (預設 top15)。"""
+    if getattr(args, "symbols", ""):
+        return args.symbols.split(",")
+    uni = provider.universe()
+    if uni:
+        return uni
+    from src.data.universe import resolve
+    return resolve(getattr(args, "universe", "top15"))
+
+
 def _parse_params(s: str) -> dict:
     """把 'up_threshold=0.02,trend_ma=20' 解析成 {參數: 值}，值自動轉 int/float。"""
     out: dict = {}
@@ -90,7 +102,7 @@ def cmd_list(args):
 
 def cmd_backtest(args):
     provider = _provider(args)
-    symbols = args.symbols.split(",") if args.symbols else provider.universe()
+    symbols = _symbols(args, provider)
     strat = strategies.build(args.strategy, **_parse_params(args.params))
     bt = Backtester(
         provider,
@@ -118,7 +130,7 @@ def cmd_compare(args):
     from src.data.cache import CachingProvider
 
     provider = CachingProvider(_provider(args))
-    symbols = args.symbols.split(",") if args.symbols else provider.universe()
+    symbols = _symbols(args, provider)
     names = args.strategy.split(",") if args.strategy else list(strategies.REGISTRY)
 
     print(f"比較 {len(names)} 個策略 × {len(symbols)} 檔股票（{args.start} ~ {args.end}），請稍候...\n")
@@ -144,7 +156,7 @@ def cmd_compare(args):
 
 def cmd_scan(args):
     provider = _provider(args)
-    symbols = args.symbols.split(",") if args.symbols else provider.universe()
+    symbols = _symbols(args, provider)
     strat = strategies.build(args.strategy)
     # Telegram 通知：加 --notify 且環境變數有設才會啟用
     notifier = None
@@ -214,7 +226,7 @@ def cmd_screen(args):
 def cmd_fundamentals(args):
     """檢視某檔股票抓到的基本面 (除錯用)，看哪些欄位有值、哪些是 None。"""
     provider = _provider(args)
-    syms = args.symbols.split(",") if args.symbols else provider.universe()
+    syms = _symbols(args, provider)
     for sym in syms:
         f = provider.fundamentals(sym)
         if f is None:
