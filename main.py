@@ -154,6 +154,44 @@ def cmd_compare(args):
     print("\n夏普值越高代表『風險調整後報酬』越好（同樣賺，波動越小越優）。")
 
 
+def cmd_pick(args):
+    """科學選股：對一籃子股票各自回測同一策略，按夏普排名，挑出最速配的前 N 檔。"""
+    from src.data.cache import CachingProvider
+
+    provider = CachingProvider(_provider(args))
+    symbols = _symbols(args, provider)
+
+    print(f"用『{args.strategy}』策略逐檔回測 {len(symbols)} 檔（{args.start}~{args.end}），請稍候...\n")
+    rows = []
+    for sym in symbols:
+        try:
+            strat = strategies.build(args.strategy)
+            bt = Backtester(provider, initial_cash=args.cash, fee_discount=args.fee_discount,
+                            cooldown_days=args.cooldown, regime_filter=args.regime)
+            r = bt.run(strat, [sym], args.start, args.end)
+            if len(r.trades) == 0:
+                continue  # 沒交易代表這檔不符合此策略，略過
+            rows.append((sym, r.total_return, r.cagr, r.max_drawdown, r.sharpe, len(r.trades)))
+        except Exception as e:
+            print(f"  {sym} 失敗: {e}")
+
+    rows.sort(key=lambda x: x[4], reverse=True)
+    from src.data.universe import NAMES
+    print(f"{'排名':<4}{'股票':<14}{'總報酬':>9}{'年化':>8}{'最大回撤':>10}{'夏普':>7}{'交易數':>7}")
+    print("-" * 62)
+    for i, (sym, tr, cagr, mdd, sharpe, n) in enumerate(rows, 1):
+        star = "⭐" if i <= args.top else "  "
+        label = f"{sym}{NAMES.get(sym, '')}"
+        print(f"{star}{i:<2}{label:<14}{tr:>8.2%}{cagr:>8.2%}{mdd:>10.2%}{sharpe:>7.2f}{n:>7}")
+
+    top = [r[0] for r in rows[: args.top]]
+    print(f"\n🎯 建議分散組合（夏普最高的 {len(top)} 檔）：{','.join(top)}")
+    if top:
+        print(f"   直接拿去掃描： python main.py scan --strategy {args.strategy} --source finmind "
+              f"--regime --symbols {','.join(top)} --notify")
+    print("\n⚠️ 這是『歷史』最速配，不保證未來；空頭時靠 --regime 保護。")
+
+
 def cmd_scan(args):
     provider = _provider(args)
     symbols = _symbols(args, provider)
@@ -336,6 +374,20 @@ def build_parser():
     sc.add_argument("--regime", action="store_true", help="大盤風向濾網：跌破年線時禁止做多 (建議開啟)")
     sc.add_argument("--notify", action="store_true", help="把交易訊號推到 Telegram")
     sc.set_defaults(func=cmd_scan)
+
+    pk = sub.add_parser("pick", help="科學選股：一個策略逐檔回測，挑夏普最高的前 N 檔")
+    pk.add_argument("--strategy", required=True)
+    pk.add_argument("--symbols", default="", help="逗號分隔股票；留空用 --universe")
+    pk.add_argument("--universe", default="tw50", help="預設股池: tw50 (預設) 或 top15")
+    pk.add_argument("--top", type=int, default=5, help="挑前幾檔 (預設 5)")
+    pk.add_argument("--start", default="2023-01-01")
+    pk.add_argument("--end", default="2025-12-31")
+    pk.add_argument("--cash", type=float, default=1_000_000)
+    pk.add_argument("--fee-discount", type=float, default=0.28)
+    pk.add_argument("--cooldown", type=int, default=5)
+    pk.add_argument("--regime", action="store_true", help="大盤風向濾網")
+    pk.add_argument("--source", choices=["sample", "finmind"], default="finmind")
+    pk.set_defaults(func=cmd_pick)
 
     cp = sub.add_parser("compare", help="批次比較：所有策略跑同一批股票，按夏普排名")
     cp.add_argument("--symbols", default="", help="逗號分隔股票；留空用樣本股")

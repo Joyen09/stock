@@ -121,7 +121,10 @@ class Backtester:
         broker = PaperBroker(cash=self.initial_cash, fee_discount=self.fee_discount)
 
         data: Dict[str, pd.DataFrame] = {s: self.provider.history(s, start, end) for s in symbols}
-        funds = {s: self.provider.fundamentals(s) for s in symbols}
+        # 只有需要基本面的策略才抓財報，省 FinMind 呼叫次數 (技術面策略免抓)。
+        funds = {}
+        if getattr(strategy, "requires_fundamentals", False):
+            funds = {s: self.provider.fundamentals(s) for s in symbols}
         bench_full = self.provider.benchmark(start, end)
 
         # 統一交易日曆 (所有股票日期聯集)。
@@ -156,7 +159,7 @@ class Backtester:
                 ctx = StrategyContext(
                     symbol=sym,
                     prices=window,
-                    fundamentals=funds[sym],
+                    fundamentals=funds.get(sym),
                     benchmark=bench,
                     position=pos if pos.shares > 0 else None,
                 )
