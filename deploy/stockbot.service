@@ -1,0 +1,25 @@
+# systemd 服務：跑一次掃描就退出 (Type=oneshot)，由 stockbot.timer 定時觸發。
+# 安裝：
+#   sudo cp deploy/stockbot.service /etc/systemd/system/
+#   依實際路徑/使用者修改下面的 User、WorkingDirectory、ExecStart
+[Unit]
+Description=Taiwan stock famous-strategy scan (run once)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/stock
+# 實單金鑰請放在這個 EnvironmentFile（chmod 600，且已被 .gitignore 忽略）
+EnvironmentFile=-/home/YOUR_USER/stock/.env
+# 預設 dry-run（不真的下單）；確認無誤後把 --live 加上去
+ExecStart=/home/YOUR_USER/stock/.venv/bin/python main.py scan --strategy oneil --source finmind
+
+# 資源上限：避免萬一吃爆記憶體影響同台的其他服務（如 pionex-bot）
+MemoryMax=400M
+CPUQuota=50%
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

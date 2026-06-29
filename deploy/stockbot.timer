@@ -1,0 +1,17 @@
+# systemd 計時器：台股收盤後（14:00 後）每日跑一次掃描。
+# 安裝：
+#   sudo cp deploy/stockbot.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now stockbot.timer
+#   systemctl list-timers stockbot*      # 確認下次觸發時間
+[Unit]
+Description=Run stock scan daily after market close
+
+[Timer]
+# 台北時間每天 14:05（台股 13:30 收盤後）。
+# 注意：VM 時區若為 UTC，請改成 06:05，或先 `sudo timedatectl set-timezone Asia/Taipei`
+OnCalendar=Mon-Fri 14:05
+Persistent=true
+
+[Install]
+WantedBy=timers.target
