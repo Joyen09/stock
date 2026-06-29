@@ -106,6 +106,29 @@ def cmd_scan(args):
         print(f"（已推送 {len(plans)} 筆訊號到 Telegram）")
 
 
+def cmd_fundamentals(args):
+    """檢視某檔股票抓到的基本面 (除錯用)，看哪些欄位有值、哪些是 None。"""
+    provider = _provider(args)
+    syms = args.symbols.split(",") if args.symbols else provider.universe()
+    for sym in syms:
+        f = provider.fundamentals(sym)
+        if f is None:
+            print(f"{sym}: 無法取得基本面")
+            continue
+        print(f"\n=== {sym} {f.name} ===")
+        fields = [
+            ("本益比 PE", f.pe), ("股價淨值比 PB", f.pb), ("ROE(%)", f.roe),
+            ("EPS", f.eps), ("EPS成長(%)", f.eps_growth), ("營收成長(%)", f.revenue_growth),
+            ("殖利率(%)", f.dividend_yield), ("負債比(%)", f.debt_ratio),
+            ("流動比(%)", f.current_ratio), ("毛利率(%)", f.gross_margin), ("PEG", f.peg),
+        ]
+        for label, val in fields:
+            mark = "✓" if val is not None else "✗ (缺)"
+            print(f"  {label:<16}: {val if val is not None else '—':<12} {mark}")
+        if f.extra:
+            print(f"  (備註: {f.extra})")
+
+
 def cmd_notify_test(args):
     from src.notify import TelegramNotifier
     n = TelegramNotifier()
@@ -160,6 +183,11 @@ def build_parser():
     sc.add_argument("--realtime", action="store_true", help="盤中用 Shioaji 即時報價更新今日 K (不下單也可)")
     sc.add_argument("--real-account", action="store_true", help="Shioaji 用實單帳戶 (預設模擬盤)")
     sc.set_defaults(func=cmd_scan)
+
+    fd = sub.add_parser("fundamentals", help="檢視某股票抓到的基本面 (除錯用)")
+    fd.add_argument("--symbols", default="", help="逗號分隔，如 2330,2454")
+    fd.add_argument("--source", choices=["sample", "finmind"], default="finmind")
+    fd.set_defaults(func=cmd_fundamentals)
 
     sub.add_parser("notify-test", help="送一則 Telegram 測試訊息").set_defaults(func=cmd_notify_test)
     sub.add_parser("notify-chatid", help="查詢自己的 Telegram chat_id").set_defaults(func=cmd_notify_chatid)
