@@ -70,6 +70,50 @@ chmod 600 ~/stock/.env
 
 之後只要掃描掃到買/賣訊號，就會自動推播到你的 Telegram（沒訊號不推，不會洗版）。
 
+## 步驟六：Shioaji 模擬盤自動交易（假錢空跑）
+
+### 6-1 取得 API 金鑰
+
+Shioaji 是永豐金證券的 API，**需要永豐金證券帳戶**：
+- 沒帳戶 → 先線上開戶 https://www.sinotrade.com.tw/openact （約 1-2 個工作天）
+- 有帳戶 → 登入官網 → 「API 交易 / Shioaji」→ 簽署風險同意書 → 「API 金鑰管理」新增金鑰
+- 拿到 **API Key** 與 **Secret Key**（Secret 只顯示一次，務必存好）
+- **模擬盤不需要憑證(CA)**，這兩串就夠
+
+把金鑰加進 `~/stock/.env`：
+```
+SHIOAJI_API_KEY=你的APIKey
+SHIOAJI_SECRET_KEY=你的SecretKey
+```
+
+### 6-2 安裝並測試連線
+
+```bash
+cd ~/stock && source .venv/bin/activate
+pip install shioaji
+
+# 測試登入 (預設模擬盤)，應印出「✅ 登入成功」+ 餘額 + 即時報價
+python main.py shioaji-test
+```
+
+### 6-3 模擬盤自動下單
+
+```bash
+# 手動跑一次：用模擬盤(假錢)自動下單 + 即時報價 + Telegram 通知
+python main.py scan --strategy oneil --source finmind --realtime --live
+```
+
+> 旗標說明：`--live` = 真的送出委託；**沒有** `--real-account` = 送到**模擬盤(假錢)**。
+> 兩個都加才是實單真錢。
+
+### 6-4 設定排程自動跑
+
+把 `deploy/stockbot.service` 裡的 ExecStart 切到 **B（模擬盤全自動）那行**（已預設），
+然後照步驟四安裝/啟用 timer。系統就會每交易日盤中每 5 分鐘自動用模擬盤下單並推 Telegram。
+
+**建議模擬盤至少空跑 2-4 週**，每天看 Telegram 通知與 `journalctl -u stockbot.service` 的下單紀錄，
+確認行為正確、沒有亂下單，再考慮切到實單（模式 C，需另設定憑證）。
+
 > ⚠️ 第一次務必 `simulation=True` + `dry_run`（service 預設沒加 `--live`，就是不真的下單）。確認連續幾天訊號正常，再把 `--live` 加進 `ExecStart`。
 
 ## 步驟四：設定每日自動掃描（systemd timer）

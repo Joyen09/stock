@@ -206,6 +206,33 @@ def cmd_notify_chatid(args):
         print(f"  chat_id={c['chat_id']}   ({c['name']})")
 
 
+def cmd_shioaji_test(args):
+    """測試 Shioaji 連線：登入(預設模擬盤)、印出餘額/持倉/即時報價。"""
+    try:
+        from src.broker.shioaji_broker import ShioajiBroker
+    except Exception as e:
+        print(f"載入失敗，請先 pip install shioaji：{e}")
+        return
+    mode = "實單帳戶" if args.real_account else "模擬盤"
+    print(f"嘗試以【{mode}】登入 Shioaji ...")
+    try:
+        b = ShioajiBroker(simulation=not args.real_account)
+    except Exception as e:
+        print(f"❌ 登入失敗：{e}\n請確認 .env 的 SHIOAJI_API_KEY / SHIOAJI_SECRET_KEY 正確。")
+        return
+    print("✅ 登入成功！")
+    try:
+        print(f"帳戶餘額: {b.cash():,.0f}")
+    except Exception as e:
+        print(f"(餘額查詢略過: {e})")
+    pos = b.positions()
+    print(f"目前持倉: {len(pos)} 檔" + (("  " + ", ".join(f'{p.symbol}x{p.shares}' for p in pos)) if pos else ""))
+    q = b.realtime_quote(args.symbol)
+    print(f"{args.symbol} 即時報價: {q}")
+    if hasattr(b, "logout"):
+        b.logout()
+
+
 def build_parser():
     p = argparse.ArgumentParser(description="台股名人策略交易框架")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -255,6 +282,11 @@ def build_parser():
 
     sub.add_parser("notify-test", help="送一則 Telegram 測試訊息").set_defaults(func=cmd_notify_test)
     sub.add_parser("notify-chatid", help="查詢自己的 Telegram chat_id").set_defaults(func=cmd_notify_chatid)
+
+    st = sub.add_parser("shioaji-test", help="測試 Shioaji 連線 (預設模擬盤)")
+    st.add_argument("--symbol", default="2330", help="測試即時報價用的股票")
+    st.add_argument("--real-account", action="store_true", help="用實單帳戶登入 (預設模擬盤)")
+    st.set_defaults(func=cmd_shioaji_test)
     return p
 
 
