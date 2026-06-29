@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from src.data.sample import SampleDataProvider
@@ -24,6 +25,27 @@ from src.engine.backtest import Backtester
 from src.engine.trader import LiveTrader
 from src.broker.paper import PaperBroker
 from src import strategies
+
+
+def _load_dotenv():
+    """手動執行時自動載入專案根目錄的 .env (不覆蓋已存在的環境變數)。
+
+    這樣 TELEGRAM_BOT_TOKEN / FINMIND_TOKEN 等只要寫進 .env 就會生效，
+    不必每次手動 export。systemd 排程則另由 EnvironmentFile 載入。
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip().strip('"').strip("'")
+            if key and key not in os.environ:  # 已 export 的優先，不覆蓋
+                os.environ[key] = val
 
 
 def _provider(args):
@@ -237,6 +259,7 @@ def build_parser():
 
 
 def main(argv=None):
+    _load_dotenv()
     args = build_parser().parse_args(argv)
     args.func(args)
 
