@@ -27,10 +27,12 @@ class USOvernightStrategy(Strategy):
     min_bars = 20
 
     DEFAULTS = dict(
-        up_threshold=0.01,     # 美股隔夜漲幅門檻 (+1%)
-        down_threshold=0.01,   # 美股隔夜跌幅出場門檻 (-1%)
-        trend_ma=20,           # 進場趨勢濾網
-        exit_ma=10,            # 出場均線
+        mode="momentum",          # momentum=順勢追漲 / reversal=隔夜暴跌賭回補
+        up_threshold=0.01,        # 美股隔夜漲幅門檻 (+1%)
+        down_threshold=0.01,      # 美股隔夜跌幅出場門檻 (-1%)
+        reversal_threshold=0.02,  # reversal 模式：隔夜跌幅進場門檻 (-2%)
+        trend_ma=20,              # 進場趨勢濾網
+        exit_ma=10,               # 出場均線
     )
 
     def __init__(self, lead_provider=None, **params):
@@ -56,14 +58,30 @@ class USOvernightStrategy(Strategy):
         exit_ma = ind.sma(close, p["exit_ma"]).iloc[-1]
         held = ctx.position is not None and ctx.position.shares > 0
 
-        # 出場：美股隔夜轉弱，或台股動能消失 (跌破短均線)
+        if p["mode"] == "reversal":
+            # 反向：美股隔夜『暴跌』時進場，賭台股開盤過度反應後回補
+            if held:
+                if on >= p["up_threshold"]:
+                    return self._signal(Action.SELL, 1.0, f"美股隔夜 {on:+.2%} 反彈，獲利了結", ctx.symbol)
+                if exit_ma == exit_ma and price < exit_ma * 0.95:
+                    return self._signal(Action.SELL, 1.0, "跌深續弱，停損出場", ctx.symbol)
+            if not held and on <= -p["reversal_threshold"]:
+                strength = min(1.0, 0.5 + abs(on) * 15)
+                return self._signal(
+                    Action.BUY, strength,
+                    f"美股隔夜暴跌 {on:+.2%}，賭過度反應回補 (reversal)",
+                    ctx.symbol,
+                )
+            return self._hold(f"美股隔夜 {on:+.2%}，未達反向進場門檻")
+
+        # 順勢 (momentum)：美股隔夜轉弱 / 跌破短均線 → 出場
         if held:
             if on <= -p["down_threshold"]:
                 return self._signal(Action.SELL, 1.0, f"美股隔夜 {on:+.2%} 轉弱，出場", ctx.symbol)
             if exit_ma == exit_ma and price < exit_ma:
                 return self._signal(Action.SELL, 1.0, f"跌破 {p['exit_ma']} 日均線，動能消失出場", ctx.symbol)
 
-        # 進場：美股隔夜夠強 + 台股仍在趨勢之上
+        # 順勢進場：美股隔夜夠強 + 台股仍在趨勢之上
         if on >= p["up_threshold"] and trend == trend and price >= trend:
             strength = min(1.0, 0.5 + on * 20)  # 隔夜漲越多訊號越強
             return self._signal(

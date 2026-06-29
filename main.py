@@ -56,6 +56,25 @@ def _provider(args):
     return SampleDataProvider()
 
 
+def _parse_params(s: str) -> dict:
+    """把 'up_threshold=0.02,trend_ma=20' 解析成 {參數: 值}，值自動轉 int/float。"""
+    out: dict = {}
+    for kv in (s or "").split(","):
+        kv = kv.strip()
+        if not kv or "=" not in kv:
+            continue
+        k, _, v = kv.partition("=")
+        k, v = k.strip(), v.strip()
+        try:
+            out[k] = int(v)
+        except ValueError:
+            try:
+                out[k] = float(v)
+            except ValueError:
+                out[k] = v
+    return out
+
+
 def cmd_list(args):
     print("可用名人策略：")
     titles = {
@@ -72,7 +91,7 @@ def cmd_list(args):
 def cmd_backtest(args):
     provider = _provider(args)
     symbols = args.symbols.split(",") if args.symbols else provider.universe()
-    strat = strategies.build(args.strategy)
+    strat = strategies.build(args.strategy, **_parse_params(args.params))
     bt = Backtester(
         provider,
         initial_cash=args.cash,
@@ -252,6 +271,7 @@ def build_parser():
     bt.add_argument("--trades", action="store_true", help="印出交易明細")
     bt.add_argument("--whole-lot", action="store_true", help="只買整張(1000股)；預設可買零股")
     bt.add_argument("--cooldown", type=int, default=5, help="賣出後幾個交易日內不重買 (防洗盤)，0=關閉")
+    bt.add_argument("--params", default="", help="覆寫策略參數，如 'up_threshold=0.02,down_threshold=0.03'")
     bt.set_defaults(func=cmd_backtest)
 
     sc = sub.add_parser("scan", help="掃描產生交易訊號 (模擬/實單)")
