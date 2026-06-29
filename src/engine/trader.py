@@ -142,16 +142,20 @@ class LiveTrader:
                 plan.sent = True
             plans.append(plan)
 
-        self._notify(plans, end)
+        self.last_notify_ok = self._notify(plans, end)
         return plans
 
-    def _notify(self, plans: List[TradePlan], end: str):
-        """有訊號就推 Telegram；無訊號不推，避免洗版。"""
+    def _notify(self, plans: List[TradePlan], end: str) -> bool:
+        """有訊號就推 Telegram；無訊號不推，避免洗版。回傳是否成功送出。"""
         if not plans or self.notifier is None or not getattr(self.notifier, "enabled", False):
-            return
+            return False
+        import html
+
         mode = "✅ 已下單" if not self.dry_run else "🧪 模擬(未下單)"
-        lines = [f"<b>📈 {self.strategy.name} 策略訊號</b> ({end}) {mode}"]
+        lines = [f"<b>📈 {html.escape(self.strategy.name)} 策略訊號</b> ({end}) {mode}"]
         for p in plans:
             emoji = "🟢買" if p.action == "BUY" else "🔴賣"
-            lines.append(f"{emoji} <b>{p.symbol}</b> {p.shares}股 @ {p.price:.2f}\n　{p.reason}")
-        self.notifier.send("\n".join(lines))
+            # 理由含 PEG<=1.2、>0 等 < > 符號，HTML 模式須跳脫，否則 Telegram 回 400。
+            reason = html.escape(p.reason)
+            lines.append(f"{emoji} <b>{html.escape(p.symbol)}</b> {p.shares}股 @ {p.price:.2f}\n　{reason}")
+        return self.notifier.send("\n".join(lines))

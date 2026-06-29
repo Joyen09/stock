@@ -191,7 +191,10 @@ def cmd_scan(args):
     for p in plans:
         print(f"  {p.action:<4} {p.symbol} {p.shares:>6} 股 @ {p.price:>8.2f}  {p.reason}")
     if notifier and notifier.enabled and plans:
-        print(f"（已推送 {len(plans)} 筆訊號到 Telegram）")
+        if getattr(trader, "last_notify_ok", False):
+            print(f"（已推送 {len(plans)} 筆訊號到 Telegram）")
+        else:
+            print("（Telegram 推送失敗，請檢查上方錯誤訊息）")
 
 
 def cmd_screen(args):
