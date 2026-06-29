@@ -1,0 +1,28 @@
+# 設定範本：複製成 config.yaml 後填入自己的值。
+# ⚠️ config.yaml 已被 .gitignore 忽略，避免金鑰外洩。請勿把任何金鑰 commit 進 git。
+
+# 資料來源：sample (離線樣本) / finmind (真實台股)
+data_source: sample
+
+# FinMind 資料 token (data_source=finmind 時使用)，建議改用環境變數 FINMIND_TOKEN
+finmind_token: ""
+
+# 永豐金證券 Shioaji (實單時使用)，全部建議改走環境變數，不要寫在這
+shioaji:
+  simulation: true          # true=模擬盤；確認無誤再改 false 實單
+  # api_key / secret_key / ca_path 一律放環境變數，見 README
+
+# 資金控管
+account:
+  initial_cash: 1000000     # 初始資金
+  position_pct: 0.2         # 每檔最多投入比例
+  fee_discount: 0.28        # 手續費折扣 (2.8 折)
+
+# 要交易的股票清單
+symbols:
+  - "2330"   # 台積電
+  - "2317"   # 鴻海
+  - "2454"   # 聯發科
+
+# 啟用的策略
+strategy: buffett

@@ -1,0 +1,29 @@
+# 機敏設定 / 金鑰 — 絕對不可進版控
+config.yaml
+.env
+*.pfx
+*.cer
+ca/
+certs/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+
+# 資料快取 / 輸出
+*.csv
+*.parquet
+data_cache/
+output/
+*.log
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
