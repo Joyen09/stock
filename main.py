@@ -108,6 +108,35 @@ def cmd_scan(args):
         print(f"（已推送 {len(plans)} 筆訊號到 Telegram）")
 
 
+def cmd_screen(args):
+    """對一籃子股票跑所有 (或指定) 策略，列出今日各策略的買進名單。"""
+    from src.engine.screener import Screener, format_report
+    from src.data.universe import resolve
+    from src.notify import TelegramNotifier
+
+    provider = _provider(args)
+    if args.symbols:
+        symbols = args.symbols.split(",")
+    else:
+        symbols = resolve(args.universe)
+
+    names = args.strategy.split(",") if args.strategy else list(strategies.REGISTRY)
+    strats = [strategies.build(n) for n in names]
+
+    print(f"掃描 {len(symbols)} 檔 × {len(strats)} 策略，請稍候...")
+    res = Screener(provider, strats).run(symbols, args.end)
+    report = format_report(res)
+    print("\n" + report)
+
+    if args.notify:
+        n = TelegramNotifier()
+        if n.enabled:
+            n.send(report)
+            print("\n（已推送到 Telegram）")
+        else:
+            print("\n（未設定 Telegram，略過推播）")
+
+
 def cmd_fundamentals(args):
     """檢視某檔股票抓到的基本面 (除錯用)，看哪些欄位有值、哪些是 None。"""
     provider = _provider(args)
@@ -187,6 +216,15 @@ def build_parser():
     sc.add_argument("--realtime", action="store_true", help="盤中用 Shioaji 即時報價更新今日 K (不下單也可)")
     sc.add_argument("--real-account", action="store_true", help="Shioaji 用實單帳戶 (預設模擬盤)")
     sc.set_defaults(func=cmd_scan)
+
+    sg = sub.add_parser("screen", help="選股：列出今日各策略的買進名單")
+    sg.add_argument("--symbols", default="", help="逗號分隔股票；留空用 --universe")
+    sg.add_argument("--universe", default="top15", help="預設股池: top15 (預設) 或 tw50")
+    sg.add_argument("--strategy", default="", help="逗號分隔策略；留空=全部")
+    sg.add_argument("--end", default="2025-12-31", help="掃描基準日期")
+    sg.add_argument("--source", choices=["sample", "finmind"], default="finmind")
+    sg.add_argument("--notify", action="store_true", help="把結果推到 Telegram")
+    sg.set_defaults(func=cmd_screen)
 
     fd = sub.add_parser("fundamentals", help="檢視某股票抓到的基本面 (除錯用)")
     fd.add_argument("--symbols", default="", help="逗號分隔，如 2330,2454")

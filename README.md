@@ -58,6 +58,10 @@ python main.py backtest --strategy livermore --symbols 2330,2454 --start 2024-01
 
 # 5. 模擬盤掃描訊號（dry-run，只印出會下的單，不會真的下單）
 python main.py scan --strategy oneil
+
+# 6. 選股：列出今日各策略的買進名單（一籃子股票一次掃）
+python main.py screen --universe top15 --source finmind
+python main.py screen --symbols 2330,2317,2454 --source finmind --notify   # 結果推 Telegram
 ```
 
 回測輸出包含：總報酬率、年化報酬(CAGR)、最大回撤、夏普值、交易次數與明細，
