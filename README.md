@@ -35,9 +35,28 @@
 | `lynch` | 彼得‧林區 | 成長合理價 GARP | PEG≤1.2、EPS 成長 15~50%、營收成長 + 站上季線 |
 | `oneil` | 威廉‧歐尼爾 | 動能突破 CANSLIM | 帶量突破 52 週新高、相對強弱 RS≥1、停損 8% |
 | `livermore` | 傑西‧李佛摩 | 順勢趨勢 | 突破關鍵高點 + 順勢，ATR 移動停損、跌破關鍵低點出場 |
+| `us_overnight` | 華爾街隔夜 | lead-lag | 美股(費半/台積電ADR)隔夜領先台股；**經回測證實成本吃光、不建議實用** |
 
 每個策略都在對應檔案開頭詳細註解其理念與條件，方便你調參或新增自己的策略
 （`src/strategies/`）。
+
+> 💡 **大盤風向濾網（`--regime`）**：加權指數跌破年線(200MA)時禁止任何策略做多，只准出場。
+> 回測證實能在空頭（如 2022）保住資金，**強烈建議所有指令都加上 `--regime`**。
+
+---
+
+## 二之二、研究結論（本專案實測心得）
+
+用真實台股資料（FinMind）完整跑過「多頭→空頭→過度配適」驗證後的結論：
+
+1. **最穩策略 = `lynch`（彼得林區）+ `--regime`**：多頭夏普 ~1.1、空頭靠濾網保本。
+2. **「聽起來厲害」≠ 能賺**：`us_overnight` 美股隔夜套利，回測證實交易過多被成本吃光（夏普 ~0）。
+3. **選股比策略更關鍵**：同策略換股票，夏普可從 1.2 掉到 0.4。用 `pick` 科學選股、避開牛皮股。
+4. **空頭會讓多頭冠軍墊底**：必須有大盤風向濾網，不能無腦做多。
+5. **慎防背答案**：`pick` 挑的是歷史贏家，務必用 `walkforward` 做訓練/測試分段驗證。
+   實測 lynch 測試期（沒看過的未來）夏普仍有 ~1.3、年化 ~7.5%——**這才是合理期待，不是回測的 80%**。
+
+> **校準你的期待**：穩健策略合理目標約**年化 7~10%**，不是一夜致富。重點是「多頭能賺、空頭能守」。
 
 ---
 
@@ -61,11 +80,41 @@ python main.py scan --strategy oneil
 
 # 6. 選股：列出今日各策略的買進名單（一籃子股票一次掃）
 python main.py screen --universe top15 --source finmind
-python main.py screen --symbols 2330,2317,2454 --source finmind --notify   # 結果推 Telegram
 ```
 
 回測輸出包含：總報酬率、年化報酬(CAGR)、最大回撤、夏普值、交易次數與明細，
 並已套用真實台股交易成本（手續費 0.1425%、證交稅 0.3%，可設折扣）。
+
+### 完整指令一覽
+
+| 指令 | 用途 |
+|------|------|
+| `list` | 列出所有策略 |
+| `backtest` | 回測單一策略（`--regime` 風向濾網、`--params` 調參、`--cooldown` 防洗盤） |
+| `compare` | 一次比較所有策略跑同一批股票，按夏普排名 |
+| `pick` | 科學選股：一個策略逐檔回測整個股池，挑夏普最高的前 N 檔 |
+| `walkforward` | 防過度配適：訓練期選股 → 測試期（沒看過）驗證，揭露真實前瞻能力 |
+| `screen` | 列出今日各策略的買進名單（`--notify` 推 Telegram） |
+| `scan` | 模擬盤/實單自動交易（`--live` 送單、`--realtime` 即時報價、`--notify` 通知） |
+| `fundamentals` | 檢視個股抓到的基本面（除錯用） |
+| `notify-test` / `notify-chatid` | 測試 Telegram / 查 chat_id |
+| `shioaji-test` | 測試 Shioaji 連線（預設模擬盤） |
+
+### 建議的研究 → 上線流程
+
+```bash
+# ① 科學選股（用 lynch 從 tw50 挑夏普最高 5 檔，務必開 --regime）
+python main.py pick --strategy lynch --source finmind --regime --top 5
+
+# ② 防背答案驗證（訓練期選股 → 測試期驗證，看測試期是否還賺）
+python main.py walkforward --strategy lynch --source finmind --regime --top 5
+
+# ③ 用選出的組合掃今日訊號（dry-run + Telegram，不下單）
+python main.py scan --strategy lynch --source finmind --regime --symbols 2330,2891,2308 --end 2026-06-30 --notify
+
+# ④ 等 Shioaji 金鑰到位 → 模擬盤自動交易（--live 但無 --real-account = 假錢）
+python main.py scan --strategy lynch --source finmind --regime --realtime --live --notify
+```
 
 ---
 
