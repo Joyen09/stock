@@ -82,8 +82,62 @@ def apply_command(text: str, cfg: dict) -> Tuple[str, dict]:
         p = "暫停中" if cfg.get("paused") else "運作中"
         return f"📊 目前設定\n單檔預算：{b}\n最多檔數：{m}\n狀態：{p}", cfg
     if cmd in ("help", "start"):
-        return ("可用指令：\n/budget 60000\n/maxpos 5\n/pause\n/resume\n/status", cfg)
+        return ("可用指令：\n/budget 60000\n/maxpos 5\n/pause\n/resume\n/status\n"
+                "/holdings（看持倉，需API）\n/sell 2330 或 /sell all（手動賣，需API）", cfg)
     return "", cfg  # 不認得的訊息不回（避免洗版）
+
+
+# --- 需要券商連線的指令 (/holdings, /sell)；apply_command 只處理設定類 ---
+def is_broker_command(text: str) -> bool:
+    parts = (text or "").strip().lstrip("/").split()
+    return bool(parts) and parts[0].lower() in ("holdings", "positions", "sell")
+
+
+def handle_broker_command(text: str, broker) -> str:
+    parts = (text or "").strip().split()
+    cmd = parts[0].lower().lstrip("/")
+    arg = parts[1] if len(parts) > 1 else None
+    if broker is None:
+        return "此指令需要 Shioaji 連線；等你 API 金鑰設定好、模擬盤接上後就能用。"
+
+    if cmd in ("holdings", "positions"):
+        ps = [p for p in broker.positions() if p.shares > 0]
+        if not ps:
+            return "📭 目前無持倉"
+        lines = ["📦 目前持倉："]
+        for p in ps:
+            lines.append(f"　{p.symbol} {p.shares} 股 @ {p.avg_price:.1f}")
+        try:
+            lines.append(f"現金 {broker.cash():,.0f}")
+        except Exception:
+            pass
+        return "\n".join(lines)
+
+    if cmd == "sell":
+        if not arg:
+            return "用法：/sell 2330（賣某檔）或 /sell all（全部賣出）"
+        from src.broker.base import Order, OrderSide
+
+        ps = [p for p in broker.positions() if p.shares > 0]
+        targets = ps if arg.lower() == "all" else [p for p in ps if p.symbol == arg]
+        if not targets:
+            return f"找不到 {arg} 的持倉"
+        done = []
+        for p in targets:
+            broker.place_order(Order(p.symbol, OrderSide.SELL, p.shares, None, "Telegram 手動賣出"))
+            done.append(f"{p.symbol} {p.shares} 股")
+        return "🔴 已送出市價賣單：\n　" + "\n　".join(done)
+
+    return ""
+
+
+def _try_broker(simulation: bool = True):
+    try:
+        from src.broker.shioaji_broker import ShioajiBroker
+        return ShioajiBroker(simulation=simulation)
+    except Exception as e:
+        print(f"[listen] 未連 Shioaji（{e}）；/holdings /sell 暫不可用，設定類指令仍正常")
+        return None
 
 
 # --- Telegram 長輪詢監聽 ---
@@ -99,7 +153,7 @@ def _get_updates(token: str, offset: Optional[int], timeout: int = 30):
         return json.loads(r.read().decode()).get("result", [])
 
 
-def poll_loop():
+def poll_loop(simulation: bool = True):
     """持續監聽 Telegram 指令（阻塞），只處理設定好的 chat_id。給 `main.py listen` 用。"""
     from src.notify import TelegramNotifier
 
@@ -109,7 +163,8 @@ def poll_loop():
         print("未設定 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID，無法監聽。")
         return
     notifier = TelegramNotifier()
-    notifier.send("🤖 控制器已上線，可傳 /status 查設定、/budget 60000 改預算。")
+    broker = _try_broker(simulation)  # 沒有 API 也能跑，只是 /holdings /sell 暫不可用
+    notifier.send("🤖 控制器已上線。傳 /help 看指令、/status 查設定。")
     print("監聽中... (Ctrl+C 結束)")
 
     offset = None
@@ -126,8 +181,12 @@ def poll_loop():
             if str(msg.get("chat", {}).get("id")) != str(chat_id):
                 continue  # 安全：只聽自己的 chat_id
             text = msg.get("text", "")
-            reply, cfg = apply_command(text, load_runtime())
+            if is_broker_command(text):
+                reply = handle_broker_command(text, broker)
+            else:
+                reply, cfg = apply_command(text, load_runtime())
+                if reply:
+                    save_runtime(cfg)
             if reply:
-                save_runtime(cfg)
                 notifier.send(reply)
                 print(f"[listen] 指令「{text}」→ {reply.splitlines()[0]}")

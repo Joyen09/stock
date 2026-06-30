@@ -348,10 +348,10 @@ def cmd_fundamentals(args):
 
 
 def cmd_listen(args):
-    """持續監聽 Telegram 指令 (/budget /maxpos /pause /resume /status)，動態調整設定。"""
+    """持續監聽 Telegram 指令 (/budget /maxpos /pause /resume /status /holdings /sell)。"""
     from src.control import poll_loop
     try:
-        poll_loop()
+        poll_loop(simulation=not args.real_account)
     except KeyboardInterrupt:
         print("\n已停止監聽。")
 
@@ -504,7 +504,9 @@ def build_parser():
     fd.add_argument("--source", choices=["sample", "finmind"], default="finmind")
     fd.set_defaults(func=cmd_fundamentals)
 
-    sub.add_parser("listen", help="監聽 Telegram 指令動態調整設定 (/budget /pause...)").set_defaults(func=cmd_listen)
+    ls = sub.add_parser("listen", help="監聽 Telegram 指令 (/budget /pause /holdings /sell...)")
+    ls.add_argument("--real-account", action="store_true", help="/holdings /sell 用實單帳戶 (預設模擬盤)")
+    ls.set_defaults(func=cmd_listen)
     sub.add_parser("notify-test", help="送一則 Telegram 測試訊息").set_defaults(func=cmd_notify_test)
     sub.add_parser("notify-chatid", help="查詢自己的 Telegram chat_id").set_defaults(func=cmd_notify_chatid)
 
