@@ -267,6 +267,7 @@ def cmd_scan(args):
         quote_fn=quote_fn,
         notifier=notifier,
         regime_filter=args.regime,
+        max_positions=args.max_positions,
     )
     plans = trader.scan(symbols, args.end)
 
@@ -423,6 +424,8 @@ def build_parser():
     sc.add_argument("--real-account", action="store_true", help="Shioaji 用實單帳戶 (預設模擬盤)")
     sc.add_argument("--regime", action="store_true", help="大盤風向濾網：跌破年線時禁止做多 (建議開啟)")
     sc.add_argument("--notify", action="store_true", help="把交易訊號推到 Telegram")
+    sc.add_argument("--max-positions", type=int, default=0, help="最多同時持有幾檔(只買訊號最強的前N檔)；0=不限")
+    sc.add_argument("--universe", default="top15", help="未指定 --symbols 時的候選池: top15 或 tw50")
     sc.set_defaults(func=cmd_scan)
 
     pk = sub.add_parser("pick", help="科學選股：一個策略逐檔回測，挑夏普最高的前 N 檔")

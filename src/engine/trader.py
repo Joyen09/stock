@@ -44,6 +44,7 @@ class LiveTrader:
         allow_odd_lot: bool = True,
         regime_filter: bool = False,
         regime_ma: int = 200,
+        max_positions: int = 0,
     ):
         self.provider = provider
         self.broker = broker
@@ -52,6 +53,8 @@ class LiveTrader:
         self.dry_run = dry_run
         self.lookback_days = lookback_days
         self.allow_odd_lot = allow_odd_lot
+        # 最多同時持有幾檔 (只買訊號最強的前 N 檔)；0=不限制。
+        self.max_positions = max_positions
         # 大盤風向濾網：與回測一致，加權指數跌破年線時禁止做多。
         self.regime_filter = regime_filter
         self.regime_ma = regime_ma
@@ -101,6 +104,9 @@ class LiveTrader:
         if self.regime_filter and bench is not None and len(bench) >= self.regime_ma:
             bull_market = float(bench.iloc[-1]) >= float(bench.rolling(self.regime_ma).mean().iloc[-1])
 
+        # 第一輪：評估所有股票，分出「賣出」與「買進候選 (含訊號強度)」
+        sells: List[TradePlan] = []
+        buy_cands: List[tuple] = []  # (strength, plan)
         for sym in symbols:
             df = self.provider.history(sym, start, end)
             if df.empty:
@@ -124,26 +130,35 @@ class LiveTrader:
                 if not bull_market:  # 大盤空頭，禁止做多 (與回測一致)
                     continue
                 budget = self.position_budget * sig.strength
-                if self.allow_odd_lot:
-                    shares = int(budget // price)               # 零股
-                else:
-                    shares = int(budget // (price * LOT)) * LOT  # 整張
+                shares = int(budget // price) if self.allow_odd_lot else int(budget // (price * LOT)) * LOT
                 if shares <= 0:
                     continue
-                plan = TradePlan(sym, "BUY", shares, price, sig.reason)
+                buy_cands.append((sig.strength, TradePlan(sym, "BUY", shares, price, sig.reason)))
             elif sig.action == Action.SELL and pos is not None:
-                plan = TradePlan(sym, "SELL", pos.shares, price, sig.reason)
-            else:
-                continue
+                sells.append(TradePlan(sym, "SELL", pos.shares, price, sig.reason))
 
-            if not self.dry_run:
-                side = OrderSide.BUY if plan.action == "BUY" else OrderSide.SELL
-                self.broker.place_order(Order(plan.symbol, side, plan.shares, plan.price, plan.reason))
-                plan.sent = True
+        # 先執行賣出 (出場不設上限)，釋出資金與部位額度
+        plans: List[TradePlan] = []
+        for plan in sells:
+            self._execute(plan)
+            plans.append(plan)
+
+        # 買進：只挑訊號最強的，且不超過最大持倉檔數 (避免資金被撒太散)
+        buy_cands.sort(key=lambda x: x[0], reverse=True)
+        held = len([p for p in self.broker.positions() if p.shares > 0])
+        slots = (self.max_positions - held) if self.max_positions else len(buy_cands)
+        for _, plan in buy_cands[: max(0, slots)]:
+            self._execute(plan)
             plans.append(plan)
 
         self.last_notify_ok = self._notify(plans, end)
         return plans
+
+    def _execute(self, plan: TradePlan):
+        if not self.dry_run:
+            side = OrderSide.BUY if plan.action == "BUY" else OrderSide.SELL
+            self.broker.place_order(Order(plan.symbol, side, plan.shares, plan.price, plan.reason))
+            plan.sent = True
 
     def _notify(self, plans: List[TradePlan], end: str) -> bool:
         """有訊號就推 Telegram；無訊號不推，避免洗版。回傳是否成功送出。"""
