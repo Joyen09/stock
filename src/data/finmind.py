@@ -45,7 +45,10 @@ class FinMindProvider(DataProvider):
         )
         df["date"] = pd.to_datetime(df["date"])
         df = df.set_index("date").sort_index()
-        return df[["open", "high", "low", "close", "volume"]]
+        df = df[["open", "high", "low", "close", "volume"]]
+        # 過濾爛資料：FinMind 偶有收盤=0 的列 (停牌/缺漏)，會讓回測以 0 元成交、產生假虧損。
+        df = df[df["close"] > 0]
+        return df
 
     # ---- 基本面欄位的多重候選名稱 (FinMind 不同表 type 命名略有差異) ----
     _REVENUE = ["Revenue"]

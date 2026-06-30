@@ -151,6 +151,8 @@ class Backtester:
                     continue
                 window = df.loc[:date]
                 price = float(window["close"].iloc[-1])
+                if price <= 0:  # 防爛資料：價格非正不交易，避免以 0 元成交
+                    continue
                 pos = broker.account.positions.get(sym, Position(sym))
                 bench = None
                 if bench_full is not None:
