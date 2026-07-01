@@ -51,7 +51,7 @@ SHIOAJI_SECRET_KEY=...
 SHIOAJI_CA_PATH=/home/linjoyen/stock/Sinopac.pfx
 SHIOAJI_CA_PASSWD=...
 SHIOAJI_PERSON_ID=<你的身分證字號>   # 實際值只放 VM 的 .env，勿寫進 repo
-
+```
 
 **`~/stock/runtime.json`**（Telegram 動態設定，gitignore 忽略）：`budget` / `max_positions` / `paused`。
 ⚠️ **這個會覆蓋指令上的 `--budget`**。之前使用者 Telegram 傳過 `/budget 60000` 導致下單金額爆大，
