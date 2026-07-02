@@ -141,17 +141,22 @@ def cmd_compare(args):
     symbols = _symbols(args, provider)
     names = args.strategy.split(",") if args.strategy else list(strategies.REGISTRY)
 
-    print(f"比較 {len(names)} 個策略 × {len(symbols)} 檔股票（{args.start} ~ {args.end}），請稍候...\n")
+    print(f"比較 {len(names)} 個策略 × {len(symbols)} 檔股票（{args.start} ~ {args.end}）")
+    print("每個策略要逐日回測全部個股，約需數分鐘，請耐心等（下面會逐一回報進度）：\n")
     rows = []
-    for name in names:
+    for idx, name in enumerate(names, 1):
+        print(f"  ▶ [{idx}/{len(names)}] 回測 {name} ...", flush=True)
         try:
             strat = strategies.build(name)
             bt = Backtester(provider, initial_cash=args.cash, fee_discount=args.fee_discount,
                             cooldown_days=args.cooldown, regime_filter=args.regime)
             r = bt.run(strat, symbols, args.start, args.end)
             rows.append((name, r.total_return, r.cagr, r.max_drawdown, r.sharpe, len(r.trades)))
+            print(f"    ✓ {name}：總報酬 {r.total_return:>7.2%}｜夏普 {r.sharpe:>5.2f}｜"
+                  f"{len(r.trades)} 筆交易", flush=True)
         except Exception as e:
-            print(f"  {name} 失敗: {e}")
+            print(f"    ✗ {name} 失敗: {e}", flush=True)
+    print()
 
     rows.sort(key=lambda x: x[4], reverse=True)  # 依夏普值由高到低
     print(f"{'排名':<4}{'策略':<14}{'總報酬':>9}{'年化':>8}{'最大回撤':>10}{'夏普':>7}{'交易數':>7}")
