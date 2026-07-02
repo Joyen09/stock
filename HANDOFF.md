@@ -44,8 +44,8 @@
   - **結論：lynch 防守核心 + livermore 進攻衛星，雙策略配置**；momentum 除役（兩期排名不穩 + 270 筆交易太頻繁）
 - ⏳ **下一步：雙策略空跑 2–4 週**：lynch 3萬/3檔（`stockbot.service` → paper_account.json）+
   livermore 2萬/2檔（`stockbot-livermore.service` → paper_livermore.json，14:20 錯開），皆收盤後一天一次。
-  ⚠️ Telegram `/holdings /sell` 目前只對 lynch 的 paper_account.json；看 livermore 帳戶用
-  `cat ~/stock/paper_livermore.json`（多帳戶 listener 是未來待辦）。
+  ✅ Telegram listener 已支援多帳戶：`/holdings` 合併顯示兩個策略帳戶（標籤+各自現金+總資產），
+  `/sell 2330` 自動路由到持有的帳戶、`/sell all` 全帳戶出清（`listen --paper` 預設就看兩個帳戶）。
 - ⏳ 空跑穩定後 → 才考慮小額真錢（需先走永豐實單開通審核：簽署+模擬環境測試+審核，見官網 signCenter）。
 
 ## 3. 環境與設定
